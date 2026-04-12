@@ -5,7 +5,7 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "srcc-erp-db"
-database_id = "YOUR_D1_DATABASE_ID_HERE"
+database_id = "251ad6fa-5857-4cf5-9608-e66e45a85e19"
 
 [vars]
 WEBHOOK_SECRET = "your-webhook-secret-here"
