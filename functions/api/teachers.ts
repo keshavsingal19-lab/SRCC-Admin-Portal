@@ -1,4 +1,4 @@
-import { TEACHERS } from '../../teacherData.js';
+import { TEACHERS } from '../teacherData.js';
 
 export interface Env {
   DB: D1Database;
