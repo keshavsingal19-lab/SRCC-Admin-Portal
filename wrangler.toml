@@ -1,0 +1,15 @@
+name = "srcc-admin-dashboard"
+compatibility_date = "2024-04-05"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "srcc-erp-db"
+database_id = "YOUR_D1_DATABASE_ID_HERE"
+
+[vars]
+WEBHOOK_SECRET = "your-webhook-secret-here"
+STUDENT_APP_WEBHOOK_URL = "https://student-app.example.com/webhook/absence"
+TEACHER_APP_WEBHOOK_URL = "https://teacher-app.example.com/webhook/absence"
+PYTHON_API_URL = "https://kroni19-python-parser.hf.space"
+ROOM_PYTHON_API_URL = "https://kroni19-python-parser.hf.space"

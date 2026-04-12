@@ -1,0 +1,20 @@
+{
+  "name": "SRCC Admin Portal",
+  "short_name": "SRCC Admin",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ebffff",
+  "theme_color": "#000066",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/en/thumb/3/3d/Shri_Ram_College_of_Commerce_logo.svg/1200px-Shri_Ram_College_of_Commerce_logo.svg.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/en/thumb/3/3d/Shri_Ram_College_of_Commerce_logo.svg/1200px-Shri_Ram_College_of_Commerce_logo.svg.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
