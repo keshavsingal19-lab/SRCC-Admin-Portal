@@ -6,7 +6,7 @@ import {
 import { format } from 'date-fns';
 import Select from 'react-select';
 import { DayOfWeek, TIME_SLOTS, RoomData } from '../types';
-
+import { PrintLetterhead } from '../components/PrintLetterhead';
 interface AbsenceRecord {
   id: number;
   teacher_name: string;
@@ -632,11 +632,7 @@ export default function Dashboard() {
           {/* Today's Absences List */}
           <div className={`bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden ${activeSection === 'rooms' ? 'print:hidden' : 'print:shadow-none print:border-none'}`}>
             {/* Print Header */}
-            <div className="hidden print:block text-center pb-8 border-b-2 border-srcc-portalNavy mb-8">
-              <h1 className="text-3xl font-serif font-bold text-srcc-portalNavy uppercase tracking-wider">Shri Ram College of Commerce</h1>
-              <h2 className="text-xl font-semibold text-gray-800 mt-2">Daily Faculty Absence Report</h2>
-              <p className="text-gray-600 mt-1">Date: {todayStr}</p>
-            </div>
+            <PrintLetterhead title="TEACHERS ON LEAVE" dateStr={todayStr} />
 
             <div className="px-6 py-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center print:hidden">
               <div className="flex items-center space-x-2">
@@ -947,11 +943,7 @@ export default function Dashboard() {
 
           {/* Print Table for Empty Rooms - Visually hidden except on print */}
           <div className="hidden print:block pt-4">
-             <div className="text-center pb-8 border-b-2 border-srcc-portalNavy mb-8">
-               <h1 className="text-3xl font-serif font-bold text-srcc-portalNavy uppercase tracking-wider">Shri Ram College of Commerce</h1>
-               <h2 className="text-xl font-semibold text-gray-800 mt-2">Empty Rooms Matrix (Excl. Tutorials)</h2>
-               <p className="text-gray-600 mt-1">Report Generated: {todayStr} | Selected Day: {selectedDay}</p>
-             </div>
+             <PrintLetterhead title="EMPTY ROOMS MATRIX (EXCL. TUTORIALS)" dateStr={`${todayStr} | Day: ${selectedDay}`} />
              
              <table className="min-w-full divide-y divide-gray-200 border border-gray-200 shadow-none">
                <thead className="bg-gray-100">
