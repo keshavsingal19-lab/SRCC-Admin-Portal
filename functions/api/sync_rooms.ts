@@ -25,17 +25,6 @@ const TIMETABLE_BASE_URL = "https://srcccollegetimetable.in/admin/timetable_prin
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 // Map time slot columns to our slot indices (0-8)
-// The website has 10 columns after the day label:
-//   col 0 = 8:30-9:30  -> slot 0
-//   col 1 = 9:30-10:30 -> slot 1
-//   col 2 = 10:30-11:30 -> slot 2
-//   col 3 = 11:30-12:30 -> slot 3
-//   col 4 = 12:30-1:30  -> slot 4
-//   col 5 = 1:30-2:00   -> LUNCH (skip)
-//   col 6 = 2:00-3:00   -> slot 5
-//   col 7 = 3:00-4:00   -> slot 6
-//   col 8 = 4:00-5:00   -> slot 7
-//   col 9 = 5:00-6:00   -> slot 8
 const COL_TO_SLOT: Record<number, number> = {
   0: 0, 1: 1, 2: 2, 3: 3, 4: 4,
   // col 5 is lunch break - skip
@@ -52,11 +41,7 @@ function classifyRoomType(id: string): string {
 
 // Refined extraction logic for teacher IDs
 function extractTeacherId(segment: string): string | null {
-  // Split by hyphen and clean up
   const parts = segment.split('-').map(p => p.trim());
-  
-  // Rule: Scan from RIGHT to LEFT
-  // Rule: Code is 1-4 characters, ONLY letters (no numbers)
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i];
     if (/^[A-Za-z]{1,4}$/.test(p)) {
@@ -105,24 +90,19 @@ function parseRoomHtml(html: string): { emptySlots: Record<string, number[]>, oc
         .replace(/\d+\.\s*/g, '')
         .trim();
 
-      // Check if completely empty
       const isActuallyEmpty = hasArrayStyle && textContent.length === 0;
 
       if (isActuallyEmpty) {
         emptySlots[day].push(slotIdx);
       } else {
-        // Extract Teacher ID from occupied cells
-        // Split text content by the separator lines we marked with '|'
         const segments = textContent.split('|').map(s => s.trim()).filter(s => s.length > 0);
         const teachers: string[] = [];
-        
         for (const segment of segments) {
           const tid = extractTeacherId(segment);
           if (tid && !teachers.includes(tid)) {
             teachers.push(tid);
           }
         }
-
         if (teachers.length > 0) {
           occupiedBy[day][slotIdx] = teachers;
         }
@@ -145,7 +125,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
   };
 
-  // Run the sync in the background while streaming events
+  const body = await context.request.json() as any;
+  const roomIdsToProcess: string[] = body.roomIds || [];
+  const isFirstBatch: boolean = body.isFirstBatch || false;
+  const totalRooms: number = body.totalRooms || roomIdsToProcess.length;
+  const processedCount: number = body.processedCount || 0;
+
+  // Run the sync in the background
   const syncProcess = async () => {
     try {
       // Ensure table exists
@@ -158,21 +144,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`).run();
 
-      // Clear ALL existing room data first (complete overwrite)
-      await env.DB.prepare("DELETE FROM campus_rooms").run();
+      // Clear ALL existing room data ONLY on the first batch
+      if (isFirstBatch) {
+        await env.DB.prepare("DELETE FROM campus_rooms").run();
+        await sendEvent({
+          type: 'start',
+          total: totalRooms,
+          message: `Starting sync for ${totalRooms} rooms in batches...`
+        });
+      }
 
-      await sendEvent({
-        type: 'start',
-        total: ALL_ROOM_IDS.length,
-        message: `Starting sync for ${ALL_ROOM_IDS.length} rooms...`
-      });
-
-      let processed = 0;
+      let processed = processedCount;
       let errors = 0;
       const results: any[] = [];
 
-      for (const roomId of ALL_ROOM_IDS) {
-        // Check if this room should be ignored
+      for (const roomId of roomIdsToProcess) {
         if (IGNORED_ROOMS.some(ignored => roomId.toUpperCase() === ignored.replace(/\s+/g, ''))) {
           await sendEvent({
             type: 'skip',
@@ -224,7 +210,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             type: 'progress',
             room: roomId,
             processed: ++processed,
-            total: ALL_ROOM_IDS.length,
+            total: totalRooms,
             emptySlotCount: Object.values(emptySlots).flat().length,
             message: `✅ ${roomId} synced (${Object.values(emptySlots).flat().length} free slots)`
           });
@@ -246,11 +232,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
       await sendEvent({
         type: 'complete',
-        total: ALL_ROOM_IDS.length,
+        total: totalRooms,
         processed,
         errors,
         roomsSynced: results.length,
-        message: `Sync complete! ${results.length} rooms updated, ${errors} errors.`
+        batchComplete: true,
+        message: isFirstBatch && totalRooms === results.length ? `Sync complete!` : `Batch complete (${results.length} rooms).`
       });
 
     } catch (err: any) {

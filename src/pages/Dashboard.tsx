@@ -283,67 +283,106 @@ function RoomSyncFromWebsite({ showToast, onComplete }: { showToast: (msg: strin
   const logRef = React.useRef<HTMLDivElement>(null);
 
   const startSync = async () => {
+    // Rooms to process (copied from backend list for coordination)
+    const ALL_ROOM_IDS = [
+      "CL1","CL2","CLIB","PB2","PB3","PB4",
+      "R1","R2","R3","R4","R5","R6","R7","R8","R10",
+      "R13","R14","R15","R16","R17","R18","R19","R20","R21","R22","R23","R24","R25",
+      "R26","R27","R28","R29","R30","R31","R32","R33","R34","R35","R37",
+      "SCR1","SCR2","SCR3","SCR4",
+      "T1","T2","T3","T4","T5","T6","T7","T8","T9",
+      "T11","T12","T13","T14","T15","T16","T17","T18",
+      "T23","T24","T25","T26","T27","T29",
+      "T31","T32","T33","T34","T35","T36","T37","T38","T39","T40",
+      "T41","T42","T43","T44","T45","T46","T48","T49","T50","T51","T53","T54"
+    ];
+
     setSyncing(true);
     setProgress(0);
-    setTotal(0);
+    setTotal(ALL_ROOM_IDS.length);
     setLogs([]);
     setCompleted(false);
     setCurrentRoom('');
 
+    // Split rooms into batches of 15 to stay under Cloudflare's 50 subrequest limit
+    const BATCH_SIZE = 15;
+    const batches = [];
+    for (let i = 0; i < ALL_ROOM_IDS.length; i += BATCH_SIZE) {
+      batches.push(ALL_ROOM_IDS.slice(i, i + BATCH_SIZE));
+    }
+
+    let globalProcessed = 0;
+
     try {
-      const response = await fetch('/api/sync_rooms', { method: 'POST' });
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        const isFirstBatch = i === 0;
+        
+        const response = await fetch('/api/sync_rooms', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomIds: batch,
+            totalRooms: ALL_ROOM_IDS.length,
+            isFirstBatch,
+            processedCount: globalProcessed
+          })
+        });
 
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to start sync.');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-
-            if (event.type === 'start') {
-              setTotal(event.total);
-              setLogs(prev => [...prev, `🚀 ${event.message}`]);
-            } else if (event.type === 'progress') {
-              setProgress(event.processed);
-              setCurrentRoom(event.room);
-              setLogs(prev => [...prev, event.message]);
-            } else if (event.type === 'skip') {
-              setProgress(event.processed);
-              setLogs(prev => [...prev, `⏭️ ${event.message}`]);
-            } else if (event.type === 'error') {
-              setProgress(event.processed);
-              setLogs(prev => [...prev, event.message]);
-            } else if (event.type === 'complete') {
-              setCompleted(true);
-              setLogs(prev => [...prev, `🎉 ${event.message}`]);
-              showToast(event.message, 'success');
-              onComplete();
-            } else if (event.type === 'fatal') {
-              setLogs(prev => [...prev, `💀 ${event.message}`]);
-              showToast(event.message, 'error');
-            }
-          } catch (e) {
-            // ignore parse errors
-          }
+        if (!response.ok || !response.body) {
+          throw new Error(`Batch ${i+1} failed to start.`);
         }
 
-        // Auto-scroll log
-        if (logRef.current) {
-          logRef.current.scrollTop = logRef.current.scrollHeight;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === 'start') {
+                if (isFirstBatch) setLogs(prev => [...prev, `🚀 ${event.message}`]);
+              } else if (event.type === 'progress') {
+                setProgress(event.processed);
+                globalProcessed = event.processed;
+                setCurrentRoom(event.room);
+                setLogs(prev => [...prev, event.message]);
+              } else if (event.type === 'skip') {
+                setProgress(event.processed);
+                globalProcessed = event.processed;
+                setLogs(prev => [...prev, `⏭️ ${event.message}`]);
+              } else if (event.type === 'error') {
+                setProgress(event.processed);
+                globalProcessed = event.processed;
+                setLogs(prev => [...prev, event.message]);
+              } else if (event.type === 'complete') {
+                if (i === batches.length - 1) {
+                  setCompleted(true);
+                  setLogs(prev => [...prev, `🎉 ${event.message}`]);
+                  showToast(event.message, 'success');
+                  onComplete();
+                } else {
+                  setLogs(prev => [...prev, `📦 Batch ${i+1} complete. Starting next...`]);
+                }
+              } else if (event.type === 'fatal') {
+                throw new Error(event.message);
+              }
+            } catch (e) { /* ignore */ }
+          }
+
+          if (logRef.current) {
+            logRef.current.scrollTop = logRef.current.scrollHeight;
+          }
         }
       }
     } catch (err: any) {

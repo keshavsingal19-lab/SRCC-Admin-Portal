@@ -3242,96 +3242,6 @@ var onRequestPost4 = /* @__PURE__ */ __name2(async (context) => {
     });
   }
 }, "onRequestPost");
-var ALL_ROOM_IDS = [
-  "CL1",
-  "CL2",
-  "CLIB",
-  "PB2",
-  "PB3",
-  "PB4",
-  "R1",
-  "R2",
-  "R3",
-  "R4",
-  "R5",
-  "R6",
-  "R7",
-  "R8",
-  "R10",
-  "R13",
-  "R14",
-  "R15",
-  "R16",
-  "R17",
-  "R18",
-  "R19",
-  "R20",
-  "R21",
-  "R22",
-  "R23",
-  "R24",
-  "R25",
-  "R26",
-  "R27",
-  "R28",
-  "R29",
-  "R30",
-  "R31",
-  "R32",
-  "R33",
-  "R34",
-  "R35",
-  "R37",
-  "SCR1",
-  "SCR2",
-  "SCR3",
-  "SCR4",
-  "T1",
-  "T2",
-  "T3",
-  "T4",
-  "T5",
-  "T6",
-  "T7",
-  "T8",
-  "T9",
-  "T11",
-  "T12",
-  "T13",
-  "T14",
-  "T15",
-  "T16",
-  "T17",
-  "T18",
-  "T23",
-  "T24",
-  "T25",
-  "T26",
-  "T27",
-  "T29",
-  "T31",
-  "T32",
-  "T33",
-  "T34",
-  "T35",
-  "T36",
-  "T37",
-  "T38",
-  "T39",
-  "T40",
-  "T41",
-  "T42",
-  "T43",
-  "T44",
-  "T45",
-  "T46",
-  "T48",
-  "T49",
-  "T50",
-  "T51",
-  "T53",
-  "T54"
-];
 var IGNORED_ROOMS = ["PRINCIPAL OFFICE", "PLAYGROUND", "SEMINAR HALL"];
 var TIMETABLE_BASE_URL = "https://srcccollegetimetable.in/admin/timetable_printpreview.php?mode=print&roomno=";
 var DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -3425,6 +3335,11 @@ var onRequestPost5 = /* @__PURE__ */ __name2(async (context) => {
 
 `));
   }, "sendEvent");
+  const body = await context.request.json();
+  const roomIdsToProcess = body.roomIds || [];
+  const isFirstBatch = body.isFirstBatch || false;
+  const totalRooms = body.totalRooms || roomIdsToProcess.length;
+  const processedCount = body.processedCount || 0;
   const syncProcess = /* @__PURE__ */ __name2(async () => {
     try {
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS campus_rooms (
@@ -3435,16 +3350,18 @@ var onRequestPost5 = /* @__PURE__ */ __name2(async (context) => {
         occupiedBy TEXT NOT NULL DEFAULT '{}',
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`).run();
-      await env.DB.prepare("DELETE FROM campus_rooms").run();
-      await sendEvent({
-        type: "start",
-        total: ALL_ROOM_IDS.length,
-        message: `Starting sync for ${ALL_ROOM_IDS.length} rooms...`
-      });
-      let processed = 0;
+      if (isFirstBatch) {
+        await env.DB.prepare("DELETE FROM campus_rooms").run();
+        await sendEvent({
+          type: "start",
+          total: totalRooms,
+          message: `Starting sync for ${totalRooms} rooms in batches...`
+        });
+      }
+      let processed = processedCount;
       let errors = 0;
       const results = [];
-      for (const roomId of ALL_ROOM_IDS) {
+      for (const roomId of roomIdsToProcess) {
         if (IGNORED_ROOMS.some((ignored) => roomId.toUpperCase() === ignored.replace(/\s+/g, ""))) {
           await sendEvent({
             type: "skip",
@@ -3489,7 +3406,7 @@ var onRequestPost5 = /* @__PURE__ */ __name2(async (context) => {
             type: "progress",
             room: roomId,
             processed: ++processed,
-            total: ALL_ROOM_IDS.length,
+            total: totalRooms,
             emptySlotCount: Object.values(emptySlots).flat().length,
             message: `\u2705 ${roomId} synced (${Object.values(emptySlots).flat().length} free slots)`
           });
@@ -3507,11 +3424,12 @@ var onRequestPost5 = /* @__PURE__ */ __name2(async (context) => {
       }
       await sendEvent({
         type: "complete",
-        total: ALL_ROOM_IDS.length,
+        total: totalRooms,
         processed,
         errors,
         roomsSynced: results.length,
-        message: `Sync complete! ${results.length} rooms updated, ${errors} errors.`
+        batchComplete: true,
+        message: isFirstBatch && totalRooms === results.length ? `Sync complete!` : `Batch complete (${results.length} rooms).`
       });
     } catch (err) {
       await sendEvent({
