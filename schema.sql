@@ -64,6 +64,7 @@ CREATE TABLE campus_rooms (
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     emptySlots TEXT NOT NULL,
+    occupiedBy TEXT NOT NULL DEFAULT '{}',
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

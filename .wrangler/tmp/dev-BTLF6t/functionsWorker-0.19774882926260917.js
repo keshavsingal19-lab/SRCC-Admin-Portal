@@ -3368,7 +3368,7 @@ function extractTeacherId(segment) {
 }
 __name(extractTeacherId, "extractTeacherId");
 __name2(extractTeacherId, "extractTeacherId");
-function parseRoomHtml(html2) {
+function parseRoomHtml(html) {
   const emptySlots = {};
   const occupiedBy = {};
   for (const day of DAY_NAMES) {
@@ -3378,7 +3378,7 @@ function parseRoomHtml(html2) {
       `<td[^>]*>\\s*${day}\\s*</td>([\\s\\S]*?)(?:</tr>)`,
       "i"
     );
-    const dayMatch = html2.match(dayRegex);
+    const dayMatch = html.match(dayRegex);
     if (!dayMatch) continue;
     const rowContent = dayMatch[1];
     const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
@@ -3465,6 +3465,7 @@ var onRequestPost5 = /* @__PURE__ */ __name2(async (context) => {
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
           }
+          const html = await response.text();
           const { emptySlots, occupiedBy } = parseRoomHtml(html);
           const roomType = classifyRoomType(roomId);
           await env.DB.prepare(`

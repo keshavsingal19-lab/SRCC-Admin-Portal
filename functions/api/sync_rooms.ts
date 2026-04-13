@@ -196,6 +196,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             throw new Error(`HTTP ${response.status}`);
           }
 
+          const html = await response.text();
           const { emptySlots, occupiedBy } = parseRoomHtml(html);
           const roomType = classifyRoomType(roomId);
 
