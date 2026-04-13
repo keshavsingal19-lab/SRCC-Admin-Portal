@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Calendar as CalendarIcon, UserCheck, AlertCircle, CheckCircle2, Printer,
-  Clock, Edit2, Trash2, X, Users, UserPlus, Upload, Building2, Search, Filter
+  Clock, Edit2, Trash2, X, Users, UserPlus, Upload, Building2, Search, Filter,
+  RefreshCw, Wifi, CheckCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Select from 'react-select';
@@ -266,6 +267,157 @@ function RoomTimetableUploader({ showToast }: { showToast: (msg: string, type: '
             🤖 AI is mapping campus rooms...
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// --- LIVE ROOM SYNC FROM WEBSITE ---
+function RoomSyncFromWebsite({ showToast, onComplete }: { showToast: (msg: string, type: 'success' | 'error') => void; onComplete: () => void }) {
+  const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [currentRoom, setCurrentRoom] = useState('');
+  const [logs, setLogs] = useState<string[]>([]);
+  const [completed, setCompleted] = useState(false);
+  const logRef = React.useRef<HTMLDivElement>(null);
+
+  const startSync = async () => {
+    setSyncing(true);
+    setProgress(0);
+    setTotal(0);
+    setLogs([]);
+    setCompleted(false);
+    setCurrentRoom('');
+
+    try {
+      const response = await fetch('/api/sync_rooms', { method: 'POST' });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to start sync.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+
+            if (event.type === 'start') {
+              setTotal(event.total);
+              setLogs(prev => [...prev, `🚀 ${event.message}`]);
+            } else if (event.type === 'progress') {
+              setProgress(event.processed);
+              setCurrentRoom(event.room);
+              setLogs(prev => [...prev, event.message]);
+            } else if (event.type === 'skip') {
+              setProgress(event.processed);
+              setLogs(prev => [...prev, `⏭️ ${event.message}`]);
+            } else if (event.type === 'error') {
+              setProgress(event.processed);
+              setLogs(prev => [...prev, event.message]);
+            } else if (event.type === 'complete') {
+              setCompleted(true);
+              setLogs(prev => [...prev, `🎉 ${event.message}`]);
+              showToast(event.message, 'success');
+              onComplete();
+            } else if (event.type === 'fatal') {
+              setLogs(prev => [...prev, `💀 ${event.message}`]);
+              showToast(event.message, 'error');
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+        }
+
+        // Auto-scroll log
+        if (logRef.current) {
+          logRef.current.scrollTop = logRef.current.scrollHeight;
+        }
+      }
+    } catch (err: any) {
+      showToast('Sync failed: ' + err.message, 'error');
+      setLogs(prev => [...prev, `💀 ${err.message}`]);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const pct = total > 0 ? Math.round((progress / total) * 100) : 0;
+
+  return (
+    <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden col-span-1 lg:col-span-2">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Wifi className="h-5 w-5 text-blue-600" />
+          <div>
+            <h2 className="text-lg font-medium text-gray-900">Live Room Sync</h2>
+            <p className="text-xs text-gray-500">Fetch all room timetables from srcccollegetimetable.in</p>
+          </div>
+        </div>
+        {completed && (
+          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+            <CheckCheck className="w-3.5 h-3.5" />
+            Sync Complete
+          </div>
+        )}
+      </div>
+      <div className="p-6 space-y-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={startSync}
+            disabled={syncing}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 shadow-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync All Rooms from Website'}
+          </button>
+          {syncing && (
+            <span className="text-sm text-gray-500">
+              {currentRoom && <span className="font-bold text-blue-600">{currentRoom}</span>}
+              {' '}— {progress}/{total} ({pct}%)
+            </span>
+          )}
+        </div>
+
+        {/* Progress Bar */}
+        {(syncing || completed) && total > 0 && (
+          <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${completed ? 'bg-emerald-500' : 'bg-blue-500'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        )}
+
+        {/* Live Log */}
+        {logs.length > 0 && (
+          <div
+            ref={logRef}
+            className="bg-gray-900 text-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-xs space-y-0.5"
+          >
+            {logs.map((line, i) => (
+              <div key={i} className="leading-relaxed">{line}</div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-[11px] text-gray-400">
+          ⚠️ This will <strong>completely overwrite</strong> all existing room data in the database.
+          Rooms skipped: Principal Office, Playground, Seminar Hall.
+          Each room is fetched with a 300ms delay to be polite to the server.
+        </p>
       </div>
     </div>
   );
@@ -986,6 +1138,7 @@ export default function Dashboard() {
             showToast={showToast}
           />
           <RoomTimetableUploader showToast={showToast} />
+          <RoomSyncFromWebsite showToast={showToast} onComplete={fetchRooms} />
         </div>
       )}
 
