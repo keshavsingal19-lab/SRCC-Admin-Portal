@@ -26,8 +26,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     dbRooms.forEach((r: any) => {
       let parsedEmptySlots = {};
+      let parsedOccupiedBy = {};
       try {
         parsedEmptySlots = JSON.parse(r.emptySlots);
+      } catch (e) {}
+      try {
+        parsedOccupiedBy = JSON.parse(r.occupiedBy || '{}');
       } catch (e) {}
 
       allRoomsMap.set(r.id, {
@@ -35,6 +39,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         name: r.name,
         type: r.type,
         emptySlots: parsedEmptySlots,
+        occupiedBy: parsedOccupiedBy,
         source: 'database'
       });
     });

@@ -50,15 +50,31 @@ function classifyRoomType(id: string): string {
   return "Lecture Hall";
 }
 
-// Minimal HTML parser - extract <td> contents between <tr> tags for each day row
-function parseRoomHtml(html: string): Record<string, number[]> {
+// Refined extraction logic for teacher IDs
+function extractTeacherId(segment: string): string | null {
+  // Split by hyphen and clean up
+  const parts = segment.split('-').map(p => p.trim());
+  
+  // Rule: Scan from RIGHT to LEFT
+  // Rule: Code is 1-4 characters, ONLY letters (no numbers)
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (/^[A-Za-z]{1,4}$/.test(p)) {
+      return p.toUpperCase();
+    }
+  }
+  return null;
+}
+
+// Enhanced HTML parser - extracts both empty slots and occupying teachers
+function parseRoomHtml(html: string): { emptySlots: Record<string, number[]>, occupiedBy: Record<string, Record<number, string[]>> } {
   const emptySlots: Record<string, number[]> = {};
+  const occupiedBy: Record<string, Record<number, string[]>> = {};
 
   for (const day of DAY_NAMES) {
     emptySlots[day] = [];
+    occupiedBy[day] = {};
 
-    // Find the row that contains this day name
-    // Pattern: <td>Monday</td> followed by up to 10 <td>...</td> cells
     const dayRegex = new RegExp(
       `<td[^>]*>\\s*${day}\\s*</td>([\\s\\S]*?)(?:</tr>)`,
       'i'
@@ -67,44 +83,54 @@ function parseRoomHtml(html: string): Record<string, number[]> {
     if (!dayMatch) continue;
 
     const rowContent = dayMatch[1];
-
-    // Extract all <td>...</td> blocks in this row
     const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
     const cells: string[] = [];
     let tdMatch;
     while ((tdMatch = tdRegex.exec(rowContent)) !== null) {
-      cells.push(tdMatch[0]); // full td tag including attributes
+      cells.push(tdMatch[0]);
     }
 
-    // Each cell corresponds to a time column (0-9)
     for (let colIdx = 0; colIdx < cells.length; colIdx++) {
       const slotIdx = COL_TO_SLOT[colIdx];
-      if (slotIdx === undefined) continue; // lunch break column
+      if (slotIdx === undefined) continue;
 
       const cell = cells[colIdx];
-      
-      // A cell is EMPTY if:
-      // 1. Its style contains "Array" (the website outputs "Array" when no bg color)
-      //    AND it has no meaningful text content
-      // 2. OR its text content is only whitespace/nbsp
       const hasArrayStyle = cell.includes('style="Array');
       
-      // Strip all HTML tags and check for meaningful text
       const textContent = cell
-        .replace(/<style[\s\S]*?<\/style>/gi, '')  // remove inline <style> blocks
-        .replace(/<[^>]+>/g, '')                     // remove all tags
-        .replace(/&nbsp;/gi, '')                     // remove nbsp
-        .replace(/__+/g, '')                         // remove separator lines
-        .replace(/\d+\.\s*/g, '')                    // remove numbering like "1. "
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/__+/g, '|') // use pipe as temporary marker for separators
+        .replace(/\d+\.\s*/g, '')
         .trim();
 
-      if (hasArrayStyle && textContent.length === 0) {
+      // Check if completely empty
+      const isActuallyEmpty = hasArrayStyle && textContent.length === 0;
+
+      if (isActuallyEmpty) {
         emptySlots[day].push(slotIdx);
+      } else {
+        // Extract Teacher ID from occupied cells
+        // Split text content by the separator lines we marked with '|'
+        const segments = textContent.split('|').map(s => s.trim()).filter(s => s.length > 0);
+        const teachers: string[] = [];
+        
+        for (const segment of segments) {
+          const tid = extractTeacherId(segment);
+          if (tid && !teachers.includes(tid)) {
+            teachers.push(tid);
+          }
+        }
+
+        if (teachers.length > 0) {
+          occupiedBy[day][slotIdx] = teachers;
+        }
       }
     }
   }
 
-  return emptySlots;
+  return { emptySlots, occupiedBy };
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -128,6 +154,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         name TEXT NOT NULL,
         type TEXT NOT NULL,
         emptySlots TEXT NOT NULL,
+        occupiedBy TEXT NOT NULL DEFAULT '{}',
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`).run();
 
@@ -169,27 +196,28 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             throw new Error(`HTTP ${response.status}`);
           }
 
-          const html = await response.text();
-          const emptySlots = parseRoomHtml(html);
+          const { emptySlots, occupiedBy } = parseRoomHtml(html);
           const roomType = classifyRoomType(roomId);
 
           // Save to D1
           await env.DB.prepare(`
-            INSERT INTO campus_rooms (id, name, type, emptySlots, last_updated)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO campus_rooms (id, name, type, emptySlots, occupiedBy, last_updated)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               type=excluded.type,
               emptySlots=excluded.emptySlots,
+              occupiedBy=excluded.occupiedBy,
               last_updated=CURRENT_TIMESTAMP
           `).bind(
             roomId.toUpperCase(),
             roomId.toUpperCase(),
             roomType,
-            JSON.stringify(emptySlots)
+            JSON.stringify(emptySlots),
+            JSON.stringify(occupiedBy)
           ).run();
 
-          results.push({ id: roomId, type: roomType, emptySlots });
+          results.push({ id: roomId, type: roomType, emptySlots, occupiedBy });
 
           await sendEvent({
             type: 'progress',

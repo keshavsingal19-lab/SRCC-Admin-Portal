@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// ../.wrangler/tmp/bundle-UD3SNW/checked-fetch.js
+// ../.wrangler/tmp/bundle-02P3MI/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -1421,8 +1421,13 @@ var onRequestGet2 = /* @__PURE__ */ __name(async (context) => {
     ROOMS.forEach((r) => allRoomsMap.set(r.id, { ...r, source: "static" }));
     dbRooms.forEach((r) => {
       let parsedEmptySlots = {};
+      let parsedOccupiedBy = {};
       try {
         parsedEmptySlots = JSON.parse(r.emptySlots);
+      } catch (e) {
+      }
+      try {
+        parsedOccupiedBy = JSON.parse(r.occupiedBy || "{}");
       } catch (e) {
       }
       allRoomsMap.set(r.id, {
@@ -1430,6 +1435,7 @@ var onRequestGet2 = /* @__PURE__ */ __name(async (context) => {
         name: r.name,
         type: r.type,
         emptySlots: parsedEmptySlots,
+        occupiedBy: parsedOccupiedBy,
         source: "database"
       });
     });
@@ -1753,15 +1759,28 @@ function classifyRoomType(id) {
   return "Lecture Hall";
 }
 __name(classifyRoomType, "classifyRoomType");
-function parseRoomHtml(html) {
+function extractTeacherId(segment) {
+  const parts = segment.split("-").map((p) => p.trim());
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (/^[A-Za-z]{1,4}$/.test(p)) {
+      return p.toUpperCase();
+    }
+  }
+  return null;
+}
+__name(extractTeacherId, "extractTeacherId");
+function parseRoomHtml(html2) {
   const emptySlots = {};
+  const occupiedBy = {};
   for (const day of DAY_NAMES) {
     emptySlots[day] = [];
+    occupiedBy[day] = {};
     const dayRegex = new RegExp(
       `<td[^>]*>\\s*${day}\\s*</td>([\\s\\S]*?)(?:</tr>)`,
       "i"
     );
-    const dayMatch = html.match(dayRegex);
+    const dayMatch = html2.match(dayRegex);
     if (!dayMatch) continue;
     const rowContent = dayMatch[1];
     const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
@@ -1775,13 +1794,26 @@ function parseRoomHtml(html) {
       if (slotIdx === void 0) continue;
       const cell = cells[colIdx];
       const hasArrayStyle = cell.includes('style="Array');
-      const textContent = cell.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, "").replace(/__+/g, "").replace(/\d+\.\s*/g, "").trim();
-      if (hasArrayStyle && textContent.length === 0) {
+      const textContent = cell.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/__+/g, "|").replace(/\d+\.\s*/g, "").trim();
+      const isActuallyEmpty = hasArrayStyle && textContent.length === 0;
+      if (isActuallyEmpty) {
         emptySlots[day].push(slotIdx);
+      } else {
+        const segments = textContent.split("|").map((s) => s.trim()).filter((s) => s.length > 0);
+        const teachers = [];
+        for (const segment of segments) {
+          const tid = extractTeacherId(segment);
+          if (tid && !teachers.includes(tid)) {
+            teachers.push(tid);
+          }
+        }
+        if (teachers.length > 0) {
+          occupiedBy[day][slotIdx] = teachers;
+        }
       }
     }
   }
-  return emptySlots;
+  return { emptySlots, occupiedBy };
 }
 __name(parseRoomHtml, "parseRoomHtml");
 var onRequestPost5 = /* @__PURE__ */ __name(async (context) => {
@@ -1801,6 +1833,7 @@ var onRequestPost5 = /* @__PURE__ */ __name(async (context) => {
         name TEXT NOT NULL,
         type TEXT NOT NULL,
         emptySlots TEXT NOT NULL,
+        occupiedBy TEXT NOT NULL DEFAULT '{}',
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`).run();
       await env.DB.prepare("DELETE FROM campus_rooms").run();
@@ -1833,24 +1866,25 @@ var onRequestPost5 = /* @__PURE__ */ __name(async (context) => {
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
           }
-          const html = await response.text();
-          const emptySlots = parseRoomHtml(html);
+          const { emptySlots, occupiedBy } = parseRoomHtml(html);
           const roomType = classifyRoomType(roomId);
           await env.DB.prepare(`
-            INSERT INTO campus_rooms (id, name, type, emptySlots, last_updated)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO campus_rooms (id, name, type, emptySlots, occupiedBy, last_updated)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               type=excluded.type,
               emptySlots=excluded.emptySlots,
+              occupiedBy=excluded.occupiedBy,
               last_updated=CURRENT_TIMESTAMP
           `).bind(
             roomId.toUpperCase(),
             roomId.toUpperCase(),
             roomType,
-            JSON.stringify(emptySlots)
+            JSON.stringify(emptySlots),
+            JSON.stringify(occupiedBy)
           ).run();
-          results.push({ id: roomId, type: roomType, emptySlots });
+          results.push({ id: roomId, type: roomType, emptySlots, occupiedBy });
           await sendEvent({
             type: "progress",
             room: roomId,
@@ -5438,7 +5472,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-UD3SNW/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-02P3MI/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -5470,7 +5504,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-UD3SNW/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-02P3MI/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

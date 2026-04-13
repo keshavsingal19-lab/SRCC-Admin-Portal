@@ -917,29 +917,33 @@ export default function Dashboard() {
         // Compute today's day name to restrict freed rooms
         const currentDayName = format(new Date(), 'EEEE') as DayOfWeek;
 
-        // Map all slots to freed rooms for the entire day (needed for report)
+        // Map all slots to freed rooms for the entire day using scraped occupancy data
         const getFreedSlotsForDay = () => {
           const map = new Map<number, any[]>();
           TIME_SLOTS.forEach((_, i) => map.set(i, []));
-          if (selectedDay !== currentDayName) return map;
-
-          todayAbsences.forEach(absence => {
-            const teacher = allTeachers.find(t => t.id === absence.teacher_id || t.name === absence.teacher_name);
-            if (!teacher || !teacher.schedule) return;
+          
+          allRooms.forEach(room => {
+            if (!room.occupiedBy || !room.occupiedBy[selectedDay]) return;
             
-            const schedule = teacher.schedule[selectedDay];
-            if (!schedule) return;
+            const dayOccupancy = room.occupiedBy[selectedDay];
+            Object.entries(dayOccupancy).forEach(([slotIdxStr, teacherIds]) => {
+              const slotIdx = parseInt(slotIdxStr);
+              const occupants = teacherIds as string[];
+              if (occupants.length === 0) return;
 
-            schedule.forEach((c: any) => {
-              if (c.room && c.periods) {
-                c.periods.forEach((pIndex: number) => {
-                   map.get(pIndex)?.push({
-                     id: c.room,
-                     name: c.room,
-                     type: 'Lecture Hall', // Generalization for freed rooms
-                     emptySlots: { [selectedDay]: [pIndex] },
-                     tags: [`Freed: ${teacher.name}`]
-                   });
+              // Check if ALL teachers assigned to this room in this slot are marked absent
+              const absentOccupants = occupants.map(tid => {
+                const teacher = allTeachers.find(t => t.id === tid);
+                if (!teacher) return null;
+                const isAbsent = todayAbsences.some(a => a.teacher_name === teacher.name);
+                return isAbsent ? teacher.name : null;
+              }).filter(Boolean) as string[];
+
+              // If everyone who was scheduled to be here is absent, the room is released
+              if (absentOccupants.length > 0 && absentOccupants.length === occupants.length) {
+                map.get(slotIdx)?.push({
+                  ...room,
+                  tags: [`Released: ${absentOccupants.join(', ')}`]
                 });
               }
             });
