@@ -626,6 +626,7 @@ export default function Dashboard() {
   else currentTimeIndex = 0;                         // 08:30 AM or earlier
 
   // --- Absence Management States ---
+  const [teacherId, setTeacherId] = useState('');
   const [teacherName, setTeacherName] = useState('');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -774,9 +775,13 @@ export default function Dashboard() {
 
     setStatus('loading');
 
-    // Find the teacher ID from the front-end state list
-    const selectedTeacher = allTeachers.find(t => t.name === teacherName);
-    const teacherId = selectedTeacher ? selectedTeacher.id : "N/A";
+    // We now have the exact teacherId guaranteed from the Select component state
+    if (!teacherId || teacherId === "N/A") {
+      setStatus('error');
+      setMessage('Invalid Teacher Selection. Please select from the dropdown.');
+      setTimeout(() => setStatus('idle'), 5000);
+      return;
+    }
 
     try {
       const response = await fetch('/api/mark_absent', {
@@ -792,6 +797,7 @@ export default function Dashboard() {
       if (response.ok) {
         setStatus('success');
         setMessage(data.message || 'Absence recorded successfully.');
+        setTeacherId('');
         setTeacherName('');
         setEndDate(startDate);
         fetchTodayAbsences();
@@ -989,9 +995,17 @@ export default function Dashboard() {
                               })
                             }}
                             placeholder="Search teacher..."
-                            options={allTeachers.map(t => ({ value: t.name, label: `${t.name} (${t.id})` }))}
-                            value={teacherName ? { value: teacherName, label: teacherName } : null}
-                            onChange={(selected) => setTeacherName(selected ? (selected as any).value : '')}
+                            options={allTeachers.map(t => ({ value: t.id, label: `${t.name} (${t.id})`, name: t.name }))}
+                            value={teacherId ? { value: teacherId, label: teacherName } : null}
+                            onChange={(selected: any) => {
+                              if (selected) {
+                                setTeacherId(selected.value);
+                                setTeacherName(selected.name);
+                              } else {
+                                setTeacherId('');
+                                setTeacherName('');
+                              }
+                            }}
                             isClearable
                           />
                         </div>
