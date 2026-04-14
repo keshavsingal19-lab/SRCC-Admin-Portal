@@ -43,7 +43,84 @@ async function startServer() {
       if (mod.ROOMS) staticRooms = mod.ROOMS;
     }
   } catch(e) {}
-  const mockRooms: any[] = [...staticRooms];
+
+  // ====== BUILD occupiedBy MAP from teacher schedules ======
+  // This maps { roomId -> { day -> { slotIndex -> [teacherIds] } } }
+  const occupiedByMap: Record<string, Record<string, Record<number, string[]>>> = {};
+
+  const SLOT_TIME_MAP: Record<string, number> = {
+    '8:30 AM': 0, '9:30 AM': 1, '10:30 AM': 2, '11:30 AM': 3, '12:30 PM': 4,
+    '2:00 PM': 5, '3:00 PM': 6, '4:00 PM': 7, '5:00 PM': 8,
+  };
+
+  // Parse each teacher's schedule to know which rooms they occupy
+  staticTeachers.forEach(teacher => {
+    if (!teacher.schedule) return;
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    days.forEach(day => {
+      const classes = teacher.schedule[day];
+      if (!Array.isArray(classes)) return;
+      classes.forEach((cls: any) => {
+        let roomId = cls.room;
+        if (!roomId) return;
+        // Normalize room: strip suffixes like "R3-VAC20", "R14-VAC19", "PB3-SEC6", etc.
+        roomId = roomId.split('-')[0].toUpperCase();
+
+        const slotIdx = SLOT_TIME_MAP[cls.startTime];
+        if (slotIdx === undefined) return;
+
+        if (!occupiedByMap[roomId]) occupiedByMap[roomId] = {};
+        if (!occupiedByMap[roomId][day]) occupiedByMap[roomId][day] = {};
+        if (!occupiedByMap[roomId][day][slotIdx]) occupiedByMap[roomId][day][slotIdx] = [];
+        if (!occupiedByMap[roomId][day][slotIdx].includes(teacher.id)) {
+          occupiedByMap[roomId][day][slotIdx].push(teacher.id);
+        }
+      });
+    });
+  });
+
+  // Merge occupiedBy into rooms
+  const mockRooms: any[] = staticRooms.map(room => {
+    const roomOccupied = occupiedByMap[room.id.toUpperCase()];
+    return {
+      ...room,
+      occupiedBy: roomOccupied || {}
+    };
+  });
+
+  console.log(`[Dev Server] Built occupiedBy mapping for ${Object.keys(occupiedByMap).length} rooms from ${staticTeachers.length} teacher schedules`);
+
+  // ====== ADMIN AUTH APIs (dev mock) ======
+
+  let adminPasscode = 'SRCC1926'; // default dev passcode
+
+  app.post('/api/admin/login', (req, res) => {
+    const { username, passcode } = req.body;
+    if (!username || !passcode) {
+      return res.status(400).json({ success: false, error: 'Missing username or passcode.' });
+    }
+    if (passcode === adminPasscode) {
+      console.log(`[Dev Auth] Admin login successful: ${username}`);
+      return res.json({ success: true, message: 'Authenticated successfully.' });
+    }
+    return res.status(401).json({ success: false, error: 'Invalid credentials. Access denied.' });
+  });
+
+  app.post('/api/admin/change_password', (req, res) => {
+    const { currentPasscode, newPasscode, confirmPasscode } = req.body;
+    if (!currentPasscode || !newPasscode || !confirmPasscode) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+    if (currentPasscode !== adminPasscode) {
+      return res.status(403).json({ error: 'Current passcode is incorrect.' });
+    }
+    if (newPasscode !== confirmPasscode) {
+      return res.status(400).json({ error: 'New passcodes do not match.' });
+    }
+    adminPasscode = newPasscode;
+    console.log(`[Dev Auth] Admin passcode updated successfully.`);
+    return res.json({ success: true, message: 'Passcode updated successfully.' });
+  });
 
   // ====== ABSENCE APIs ======
 

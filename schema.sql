@@ -12,6 +12,7 @@ CREATE TABLE admin_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    salt TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -68,6 +69,4 @@ CREATE TABLE campus_rooms (
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert a default admin user for testing (password: admin123)
--- Note: In a real app, use a proper password hashing mechanism like bcrypt.
-INSERT INTO admin_users (username, password_hash) VALUES ('admin', 'admin123');
+-- Note: Admin records are managed via the secure setup/login APIs.

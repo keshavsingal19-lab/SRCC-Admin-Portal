@@ -1,17 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Display:ital,wght@0,100..900;1,100..900&family=Outfit:wght@100..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-srcc-deepNavy: #003266;
   --color-srcc-portalNavy: #000066;
+  --color-srcc-deepNavy: #003266;
   --color-srcc-yellow: #FCEB08;
   --color-srcc-skyBg: #BFE4FA;
   --color-srcc-pageBg: #ebffff;
   
-  --font-sans: 'Outfit', 'Poppins', sans-serif;
-  --font-serif: '"Noto Serif Display"', serif;
-  --font-outfit: 'Outfit', sans-serif;
-  --font-poppins: 'Poppins', sans-serif;
+  --font-sans: 'Outfit', sans-serif;
+  --font-serif: 'Cinzel', serif;
 }
 
 body {
@@ -20,12 +19,256 @@ body {
   font-family: var(--font-sans);
 }
 
-@media print {
-  body {
-    background-color: white;
-  }
-  @page {
-    margin: 2cm;
-  }
+/* ============================================================
+   PRINT-ONLY REPORT STYLES
+   - The .print-report component is hidden on screen
+   - On print: sidebar, header, tabs all hidden; report fills page
+   ============================================================ */
+
+/* Hide report on screen */
+.print-report {
+  display: none;
 }
 
+@media print {
+  /* Page setup — remove browser headers/footers */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  /* Reset body for print */
+  html, body {
+    height: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #e8fbff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Exact physical container per page */
+  .print-page-container {
+    display: flex;
+    flex-direction: column;
+    height: 297mm; /* Exact A4 height */
+    box-sizing: border-box;
+    page-break-after: always;
+    overflow: hidden;
+    padding: 1.2cm 1.8cm 3.0cm 1.8cm; /* Increased bottom padding to 3cm for footer safety */
+    background-color: #e8fbff !important;
+    position: relative;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---- LETTERHEAD HEADER ---- */
+  .print-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 3px solid #000;
+    padding-bottom: 10px;
+    margin-bottom: 0;
+  }
+
+  .print-header-logo {
+    flex-shrink: 0;
+    width: 100px;
+    transform: translateZ(0);
+  }
+
+  .print-header-logo img {
+    width: 65px;
+    height: 65px;
+    object-fit: contain;
+    display: block;
+    backface-visibility: hidden;
+  }
+
+  .print-header-text {
+    flex: 1;
+    text-align: center;
+    color: #000;
+    padding: 0 8px;
+  }
+
+  .print-header-logo-right {
+    flex-shrink: 0;
+    width: 100px;
+    display: flex;
+    justify-content: flex-end;
+    transform: translateZ(0); /* Stabilize rendering during zoom */
+  }
+
+  .print-header-logo-right img {
+    width: 65px;
+    height: 65px;
+    object-fit: contain;
+    display: block; /* Remove baseline space */
+    backface-visibility: hidden;
+  }
+
+  .print-hindi-title {
+    font-family: 'Nirmala UI', 'Mangal', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+  }
+
+  .print-english-title {
+    font-family: 'Book Antiqua', 'Palatino Linotype', Georgia, serif;
+    font-size: 17px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    line-height: 1.2;
+    margin-top: 1px;
+  }
+
+  .print-address-hindi {
+    font-family: 'Nirmala UI', 'Mangal', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+
+  .print-address-english {
+    font-family: 'Bookman Old Style', 'Book Antiqua', Georgia, serif;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  .print-contact {
+    font-family: 'Bookman Old Style', 'Book Antiqua', Georgia, serif;
+    font-size: 9.5px;
+    font-weight: 600;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+  }
+
+  .print-hindi-inline {
+    font-family: 'Nirmala UI', 'Mangal', sans-serif;
+  }
+
+  .print-contact-sep {
+    font-size: 6px;
+  }
+
+  /* ---- TITLE + DATE ---- */
+  .print-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 15px;
+    margin-bottom: 10px;
+    padding: 0 2px;
+    font-family: 'Book Antiqua', 'Palatino Linotype', Georgia, serif;
+  }
+
+  .print-report-title {
+    font-size: 17px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .print-report-date {
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  /* ---- DATA TABLE ---- */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Book Antiqua', 'Palatino Linotype', Georgia, serif;
+    font-size: 12px;
+  }
+
+  .print-table thead {
+    /* Repeat header on every printed page */
+    display: table-header-group;
+  }
+
+  .print-table th {
+    background-color: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    border: 1px solid #333;
+    padding: 7px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+    color: #000;
+  }
+
+  .print-table td {
+    border: 1px solid #555;
+    padding: 6px 10px;
+    color: #111;
+    vertical-align: middle;
+  }
+
+  .print-table tbody tr {
+    /* Prevent rows from being split across pages */
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-table tbody tr:nth-child(even) {
+    background-color: #fafafa !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---- EMPTY STATE ---- */
+  .print-empty {
+    text-align: center;
+    padding: 60px 20px;
+    font-family: 'Book Antiqua', Georgia, serif;
+    font-size: 14px;
+    font-style: italic;
+    color: #666;
+    border: 2px dashed #ccc;
+    margin-top: 20px;
+  }
+
+  /* ---- FOOTER ---- */
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: 2.8cm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 1.8cm 1.2cm 1.8cm;
+    background-color: #e8fbff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-footer-line {
+    border-top: 2px solid #000;
+    margin-bottom: 8px;
+  }
+
+  .print-footer-text {
+    font-family: 'Book Antiqua', Georgia, serif;
+    font-size: 11px;
+    color: #000;
+    text-align: center;
+    font-weight: 500;
+  }
+}
