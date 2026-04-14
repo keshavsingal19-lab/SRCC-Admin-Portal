@@ -69,8 +69,8 @@ body {
     pointer-events: none !important;
   }
 
-  /* Ensure the root layout doesn't bleed through if it has unexpected elements */
-  #root > :not(.print-page-container) {
+  /* Ensure extensions injected into body don't show up in print */
+  body > *:not(#root) {
     display: none !important;
   }
 
