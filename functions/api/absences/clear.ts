@@ -4,7 +4,8 @@ export interface Env {
 
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const today = nowIST.toISOString().split('T')[0];
     
     // Only delete records that are currently active today
     await context.env.DB.prepare(
