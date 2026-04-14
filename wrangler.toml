@@ -8,8 +8,5 @@ database_name = "srcc-erp-db"
 database_id = "251ad6fa-5857-4cf5-9608-e66e45a85e19"
 
 [vars]
-WEBHOOK_SECRET = "your-webhook-secret-here"
-STUDENT_APP_WEBHOOK_URL = "https://student-app.example.com/webhook/absence"
-TEACHER_APP_WEBHOOK_URL = "https://teacher-app.example.com/webhook/absence"
 PYTHON_API_URL = "https://kroni19-python-parser.hf.space"
 ROOM_PYTHON_API_URL = "https://kroni19-python-parser.hf.space"

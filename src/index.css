@@ -47,6 +47,33 @@ body {
     print-color-adjust: exact;
   }
 
+  /* Nuclear isolation: Hide common browser extensions and injected elements */
+  grammarly-extension, 
+  grammarly-pop,
+  #goog-gt-tt, 
+  .goog-te-banner-frame,
+  #goog-gt- ,
+  .skype_pnh_print_container,
+  #_atssh,
+  .pocket-extension-root,
+  [data-extension-id],
+  [data-grammarly-part],
+  [id^="extension-"],
+  .translation-icons,
+  #dark-reader--fallback {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* Ensure the root layout doesn't bleed through if it has unexpected elements */
+  #root > :not(.print-page-container) {
+    display: none !important;
+  }
+
   /* Exact physical container per page */
   .print-page-container {
     display: flex;

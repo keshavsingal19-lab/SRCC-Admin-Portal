@@ -46,7 +46,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     await stmt.run();
 
-    // 2. Fire Webhooks — iterate each date in range and send individual payloads
+    // 2. Fetch Teacher ID for the webhook payload
+    const teacher = await env.DB.prepare("SELECT id FROM teachers WHERE name = ? LIMIT 1").bind(body.teacherName).first() as { id: string } | null;
+    const teacherId = teacher ? teacher.id : "N/A";
+
+    // 3. Fire Webhooks — iterate each date in range and send individual payloads
     const dateRange = getDateRange(body.startDate, body.endDate);
     const webhookHeaders = {
       "Content-Type": "application/json",
@@ -57,8 +61,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     for (const date of dateRange) {
       const payload = JSON.stringify({
+        teacherId: teacherId,
         teacherName: body.teacherName,
         date: date,
+        from: body.startDate,
+        to: body.endDate,
         adminUser: adminUser
       });
 
