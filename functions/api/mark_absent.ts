@@ -54,10 +54,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const dateRange = getDateRange(body.startDate, body.endDate);
     const webhookHeaders = {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${env.WEBHOOK_SECRET}`
+      "Authorization": `Bearer ${env.WEBHOOK_SECRET || ''}`
     };
 
+    if (!env.WEBHOOK_SECRET) {
+      console.warn("Webhook dispatch attempted but WEBHOOK_SECRET is missing from environment.");
+    }
+
     const webhookPromises: Promise<void | string>[] = [];
+    let dispatchCount = 0;
 
     for (const date of dateRange) {
       const payload = JSON.stringify({
@@ -70,27 +75,39 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
 
       if (env.STUDENT_APP_WEBHOOK_URL) {
+        console.log(`Dispatching Student Webhook for ${date} to: ${env.STUDENT_APP_WEBHOOK_URL}`);
+        dispatchCount++;
         webhookPromises.push(
           fetch(env.STUDENT_APP_WEBHOOK_URL, {
             method: "POST",
             headers: webhookHeaders,
             body: payload
           })
-            .then(() => { /* success — no action needed */ })
-            .catch(err => console.error(`Student Webhook failed for ${date}:`, err))
+            .then(res => {
+              if (!res.ok) console.error(`Student Webhook returned status ${res.status} for ${date}`);
+            })
+            .catch(err => console.error(`Student Webhook fetch failed for ${date}:`, err))
         );
+      } else {
+        console.debug(`Skipping Student Webhook for ${date}: URL not configured.`);
       }
 
       if (env.TEACHER_APP_WEBHOOK_URL) {
+        console.log(`Dispatching Teacher Webhook for ${date} to: ${env.TEACHER_APP_WEBHOOK_URL}`);
+        dispatchCount++;
         webhookPromises.push(
           fetch(env.TEACHER_APP_WEBHOOK_URL, {
             method: "POST",
             headers: webhookHeaders,
             body: payload
           })
-            .then(() => { /* success — no action needed */ })
-            .catch(err => console.error(`Teacher Webhook failed for ${date}:`, err))
+            .then(res => {
+              if (!res.ok) console.error(`Teacher Webhook returned status ${res.status} for ${date}`);
+            })
+            .catch(err => console.error(`Teacher Webhook fetch failed for ${date}:`, err))
         );
+      } else {
+        console.debug(`Skipping Teacher Webhook for ${date}: URL not configured.`);
       }
     }
 
@@ -99,8 +116,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: "Absence recorded and broadcasted.",
-      datesNotified: dateRange.length
+      message: dispatchCount > 0 ? "Absence recorded and broadcasted." : "Absence recorded (no webhooks configured).",
+      datesNotified: dispatchCount
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
