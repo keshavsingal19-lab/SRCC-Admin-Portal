@@ -46,9 +46,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     await stmt.run();
 
-    // 2. Fetch Teacher ID for the webhook payload
-    const teacher = await env.DB.prepare("SELECT id FROM teachers WHERE name = ? LIMIT 1").bind(body.teacherName).first() as { id: string } | null;
-    const teacherId = teacher ? teacher.id : "N/A";
+    // 2. Extract Teacher ID for the webhook payload
+    const teacherId = body.teacherId || "N/A";
 
     // 3. Fire Webhooks — iterate each date in range and send individual payloads
     const dateRange = getDateRange(body.startDate, body.endDate);

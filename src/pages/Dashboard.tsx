@@ -774,13 +774,17 @@ export default function Dashboard() {
 
     setStatus('loading');
 
+    // Find the teacher ID from the front-end state list
+    const selectedTeacher = allTeachers.find(t => t.name === teacherName);
+    const teacherId = selectedTeacher ? selectedTeacher.id : "N/A";
+
     try {
       const response = await fetch('/api/mark_absent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ teacherName, startDate, endDate, adminUser: 'admin' }),
+        body: JSON.stringify({ teacherId, teacherName, startDate, endDate, adminUser: 'admin' }),
       });
 
       const data = await response.json() as { message?: string; error?: string };
